@@ -25,6 +25,8 @@ export function MusicTV() {
   const [songs, setSongs] = useState<Queued[]>([]);
   const [now, setNow] = useState<NowPlaying | null>(null);
   const [err, setErr] = useState('');
+  const [kick, setKick] = useState(0);       // bump to retry feeding songs
+  const [needsTap, setNeedsTap] = useState(false);
   const player = useRef<any>(null);
   const sent = useRef<Set<string>>(new Set());
   const feeding = useRef(false);
@@ -63,6 +65,7 @@ export function MusicTV() {
       p.addListener('authentication_error', () => { sp.disconnect(); setConnected(false); setErr('Spotify signed out. Connect again.'); });
       p.addListener('account_error', () => setErr('Playing here needs Spotify Premium.'));
       p.addListener('initialization_error', () => setErr('This browser can’t play Spotify. Try Chrome on a laptop.'));
+      p.addListener('autoplay_failed', () => { setNeedsTap(true); setErr('Tap ▶ to start the music.'); });
       p.connect();
       player.current = p;
     };
@@ -88,14 +91,32 @@ export function MusicTV() {
       const st = await player.current?.getCurrentState();
       const idle = !st || (st.paused && st.position === 0 && st.track_window.next_tracks.length === 0);
       if (idle) {
+        // Make this browser the active Spotify device first, then start the list on it.
+        await sp.api('/me/player', { method: 'PUT', body: JSON.stringify({ device_ids: [device], play: false }) }).catch(() => null);
         await sp.api(`/me/player/play?device_id=${device}`, { method: 'PUT', body: JSON.stringify({ uris: unsent.map((s) => s.uri) }) });
       } else {
         for (const s of unsent) await sp.api(`/me/player/queue?${new URLSearchParams({ uri: s.uri, device_id: device })}`, { method: 'POST' });
       }
       unsent.forEach((s) => sent.current.add(s.key));
       setErr('');
-    })().catch(() => setErr('Couldn’t start playback. Try tapping play.')).finally(() => { feeding.current = false; });
-  }, [songs, armed, device]);
+    })().catch((e) => {
+      const code = String(e).match(/\d{3}/)?.[0];
+      setErr(code === '403' ? 'Spotify says this account can’t play here (Premium needed).'
+        : code === '404' ? 'Spotify couldn’t find this player yet. Tap Retry.'
+        : code === '401' ? 'Spotify signed out. Reconnect.'
+        : 'Couldn’t start playback. Tap Retry.');
+    }).finally(() => { feeding.current = false; });
+  }, [songs, armed, device, kick]);
+
+  // A real tap: unlocks audio in the browser, then plays or retries.
+  const tapPlay = async () => {
+    const pl = player.current;
+    pl?.activateElement?.();
+    setErr(''); setNeedsTap(false);
+    const st = await pl?.getCurrentState?.();
+    if (st?.track_window?.current_track) pl.resume();
+    else setKick((k) => k + 1);
+  };
 
   // Tell the phones what's going on.
   useEffect(() => {
@@ -137,7 +158,9 @@ export function MusicTV() {
         <button className="music-btn" onClick={() => sp.login()}>🎵 Connect Spotify</button>
       ) : !armed ? (
         <button className="music-btn" onClick={arm}>▶ Start the music</button>
-      ) : now ? (
+      ) : !device ? (
+        <span className="music-idle">🎵 Connecting to Spotify…</span>
+      ) : now && !needsTap ? (
         <>
           {now.art && <img className="music-art" src={now.art} alt="" />}
           <span className="music-meta"><b>{now.name}</b><span>{now.artist}</span></span>
@@ -145,9 +168,18 @@ export function MusicTV() {
           <button className="music-ctl" onClick={() => player.current?.nextTrack()} aria-label="Next song">⏭</button>
         </>
       ) : (
-        <span className="music-idle">🎵 Add songs from your phones</span>
+        <>
+          {songs.length > 0 && <button className="music-ctl big" onClick={tapPlay} aria-label="Play">▶</button>}
+          <span className="music-idle">{songs.length ? `${songs.length} ${songs.length === 1 ? 'song' : 'songs'} ready` : '🎵 Add songs from your phones'}</span>
+        </>
       )}
-      {err && <span className="music-err">{err}</span>}
+      {err && (
+        <span className="music-err">
+          {err}
+          {!/Premium|signed out|browser/.test(err) && <button className="tool" onClick={tapPlay}>Retry</button>}
+          {/signed out/.test(err) && <button className="tool" onClick={() => sp.login()}>Reconnect</button>}
+        </span>
+      )}
     </div>
   );
 }

@@ -416,3 +416,20 @@ textarea.short { min-height: 110px; font-size: 20px; }
 .results li { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: 16px; padding: 8px 10px; }
 .results img { width: 44px; height: 44px; border-radius: 8px; }
 .results .music-meta { flex: 1; }
+
+/* Music fixes + TV page on narrow screens */
+.music-ctl.big { width: 2.8em; height: 2.8em; background: #1DB954; color: #0B2A16; font-size: 1.1em; }
+.music-err { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+@media (max-width: 800px) {
+  .tv { padding: 24px 20px 120px; min-height: 100vh; }
+  .tv-moods { grid-template-columns: 1fr; }
+  .tv-acts li { border-radius: 18px; padding: 12px 14px; }
+  .tv-rules li { border-radius: 16px; padding: 12px 14px 12px 40px; }
+  .tv-rules li::before { left: 14px; }
+  .tv-match, .gallery { grid-template-columns: 1fr; }
+  .gallery.four { grid-template-columns: 1fr 1fr; }
+  .tv-placard, .tv-match .pick, .truths li, .tv-keep section { border-radius: 20px; }
+  .music { left: 12px; right: 12px; max-width: none; border-radius: 22px; padding: 8px 10px; font-size: 15px; gap: 10px; }
+  .music-art { width: 44px; height: 44px; }
+  .music-meta { flex: 1; }
+}
