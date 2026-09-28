@@ -6,6 +6,7 @@ import { rpc, roomChannel } from '@/lib/supabase';
 import { ACTS, ACT_ORDER, BEAT_SECONDS, MAPR, MOODS, PLAY_KINDS, RULES, itemText } from '@/lib/activities';
 import { applyStrokeEvent, type Stroke, type StrokeEvent } from './Canvas';
 import { TVPlay, TVPlayEnd } from './TVPlay';
+import { tvBus } from '@/lib/bus';
 import { Burst, Hearts, tintStyle } from './Deco';
 import {
   type Action, type Answer, type AnswerMap, type GameState, type RoomView,
@@ -72,6 +73,7 @@ export default function TV() {
     let queue: Promise<void> = Promise.resolve();
     const run = (fn: () => Promise<void>) => { queue = queue.then(fn).catch((e) => console.error(e)); };
     const ch: RealtimeChannel = roomChannel(session.id);
+    tvBus.set({ room: session.id, token: session.host, ch });
 
     let lastSig = '';
     const loadAnswers = async (v: RoomView): Promise<AnswerMap> => {
@@ -101,6 +103,7 @@ export default function TV() {
       const v = { ...(viewRef.current as RoomView), state: s };
       viewRef.current = v;
       setView(v);
+      tvBus.set({ view: v });
       ch.send({ type: 'broadcast', event: 'state', payload: { v: s.v } });
       await loadAnswers(v);
     };
@@ -112,11 +115,12 @@ export default function TV() {
         const v = { ...raw, state: normalize(raw.state) };
         viewRef.current = v;
         setView(v);
+        tvBus.set({ view: v });
         const ans = await loadAnswers(v);
         const next = autoAdvance(v, ans);
         if (next) await commit(next);
       } catch (e) {
-        if (String(e).includes('room_not_found')) { endedRef.current = true; writeSaved(null); setEnded(true); }
+        if (String(e).includes('room_not_found')) { endedRef.current = true; writeSaved(null); setEnded(true); tvBus.set({ room: undefined }); }
       }
     };
 
@@ -130,6 +134,7 @@ export default function TV() {
         endedRef.current = true;
         writeSaved(null);
         setEnded(true);
+        tvBus.set({ room: undefined });
         return;
       }
       const next = reduce(cur.state, a, answersRef.current);
@@ -138,6 +143,10 @@ export default function TV() {
 
     ch.on('broadcast', { event: 'action' }, ({ payload }) => run(() => handle(payload.a as Action, payload.v as number)))
       .on('broadcast', { event: 'refresh' }, () => run(refresh))
+      .on('broadcast', { event: 'sp-search' }, ({ payload }) => tvBus.emit('sp-search', payload))
+      .on('broadcast', { event: 'sp-save' }, ({ payload }) => tvBus.emit('sp-save', payload))
+      .on('broadcast', { event: 'sp-ctl' }, ({ payload }) => tvBus.emit('sp-ctl', payload))
+      .on('broadcast', { event: 'sp-hello' }, ({ payload }) => tvBus.emit('sp-hello', payload))
       .on('broadcast', { event: 'stroke' }, ({ payload }) => setStrokes((l) => applyStrokeEvent(l, payload as StrokeEvent)))
       .on('broadcast', { event: 'dial' }, ({ payload }) => setDial(Number(payload.v)))
       .on('broadcast', { event: 'tap' }, ({ payload }) => {
@@ -158,7 +167,7 @@ export default function TV() {
       const next = fn(cur.state);
       if (next) await commit(next);
     });
-    return () => { clearInterval(timer); ch.unsubscribe(); };
+    return () => { clearInterval(timer); ch.unsubscribe(); tvBus.set({ ch: null }); };
   }, [session]);
 
   // Keyboard fallback for a laptop driving the TV.

@@ -5,6 +5,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { rpc, roomChannel } from '@/lib/supabase';
 import { ACTS, ACT_ORDER, LISTEN, MAPR, MOODS, PLAY_KINDS, RULES, itemText } from '@/lib/activities';
 import { PhonePlay, TruthsWrite } from './PhonePlay';
+import { phoneBus } from '@/lib/bus';
 import { Burst, tintStyle } from './Deco';
 import { type Action, type RoomView, akey, countFor, normalize, playerName, revealSteps, revealTurn } from '@/lib/game';
 
@@ -62,6 +63,7 @@ export default function Phone() {
     if (!sess) return;
     const ch = roomChannel(sess.room);
     chRef.current = ch;
+    phoneBus.set({ room: sess.room, token: sess.token, slot: sess.slot, ch });
     let stopped = false;
     const refresh = async () => {
       if (stopped) return;
@@ -70,18 +72,22 @@ export default function Phone() {
         const v = { ...raw, state: normalize(raw.state) };
         viewRef.current = v;
         setView(v);
+        phoneBus.set({ view: v });
       } catch (e) {
-        if (String(e).includes('room_not_found')) { stopped = true; clearDrafts(sess.room); writeP(null); setEnded(true); }
+        if (String(e).includes('room_not_found')) { stopped = true; clearDrafts(sess.room); writeP(null); setEnded(true); phoneBus.set({ room: undefined, view: null }); }
       }
     };
     ch.on('broadcast', { event: 'state' }, () => { refresh(); })
-      .on('broadcast', { event: 'ended' }, () => { stopped = true; clearDrafts(sess.room); writeP(null); setEnded(true); })
+      .on('broadcast', { event: 'sp-now' }, ({ payload }) => phoneBus.emit('sp-now', payload))
+      .on('broadcast', { event: 'sp-results' }, ({ payload }) => phoneBus.emit('sp-results', payload))
+      .on('broadcast', { event: 'sp-saved' }, ({ payload }) => phoneBus.emit('sp-saved', payload))
+      .on('broadcast', { event: 'ended' }, () => { stopped = true; clearDrafts(sess.room); writeP(null); setEnded(true); phoneBus.set({ room: undefined, view: null }); })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') { ch.send({ type: 'broadcast', event: 'refresh', payload: {} }); refresh(); }
       });
     refresh();
     const timer = setInterval(refresh, 3000);
-    return () => { stopped = true; clearInterval(timer); ch.unsubscribe(); chRef.current = null; };
+    return () => { stopped = true; clearInterval(timer); ch.unsubscribe(); chRef.current = null; phoneBus.set({ room: undefined, ch: null, view: null }); };
   }, [sess]);
 
   const send = (a: Action) => {
