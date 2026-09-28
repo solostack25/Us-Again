@@ -1,11 +1,13 @@
 import Link from 'next/link';
+import { Hearts } from '@/components/Deco';
 
 export default function Home() {
   return (
     <main className="home">
-      <h1 className="home-title">Us, Again</h1>
+      <Hearts count={12} />
+      <h1 className="home-title">Us, Again <span className="heart" aria-hidden="true">♥</span></h1>
       <p className="lede">
-        Small activities for two people and an evening. Put it on the TV, answer on your phones, and take turns.
+        Ten little games for two people and an evening. Put it on the TV, answer on your phones, and take turns.
         You’re not trying to fix anything tonight. You’re remembering who this person is, and learning who they are right now.
       </p>
       <div className="home-choices">

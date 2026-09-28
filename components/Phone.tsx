@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { rpc, roomChannel } from '@/lib/supabase';
-import { ACTS, ACT_ORDER, LISTEN, MAPR, RULES, itemText } from '@/lib/activities';
-import { type Action, type RoomView, akey, countFor, normalize, playerName, revealTurn } from '@/lib/game';
+import { ACTS, ACT_ORDER, LISTEN, MAPR, MOODS, RULES, itemText } from '@/lib/activities';
+import { Burst, tintStyle } from './Deco';
+import { type Action, type RoomView, akey, countFor, normalize, playerName, revealSteps, revealTurn } from '@/lib/game';
 
 const P_KEY = 'usagain-player';
 type PSess = { room: string; token: string; slot: number; code: string };
@@ -117,8 +118,8 @@ export default function Phone() {
   if (!sess) {
     return (
       <main className="phone">
-        <p className="brand">Us, Again</p>
-        <h1 className="ph-title">Join the session on your TV.</h1>
+        <p className="brand">Us, Again <span className="heart" aria-hidden="true">♥</span></p>
+        <h1 className="ph-title">Hi there. Let’s get you on the TV.</h1>
         <div className="field">
           <label htmlFor="code">Room code</label>
           <input id="code" className="code-input" value={code} maxLength={4} autoCapitalize="characters" autoComplete="off"
@@ -144,9 +145,10 @@ export default function Phone() {
   if (s.phase === 'lobby') {
     return (
       <main className="phone">
-        <p className="brand">Us, Again</p>
+        <p className="brand">Us, Again <span className="heart" aria-hidden="true">♥</span></p>
+        <p className="big-emoji" aria-hidden="true">🫶</p>
         <h1 className="ph-title">You’re in, {nm(me)}.</h1>
-        <p className="lede">Waiting for your partner to join. The TV shows the code.</p>
+        <p className="lede">Waiting for your person to join. The code is on the TV.</p>
       </main>
     );
   }
@@ -154,22 +156,31 @@ export default function Phone() {
   if (s.phase === 'menu' || !act) {
     return (
       <main className="phone">
-        <h1 className="ph-title">Pick an activity</h1>
-        <div className="opts">
-          {ACT_ORDER.map((id) => (
-            <button key={id} className="opt big" onClick={() => send({ type: 'choose', act: id })}>
-              <span className="t">{ACTS[id].title}</span>
-              <span className="m">{ACTS[id].time}{ACTS[id].first ? '. A good one to start with.' : ''}</span>
-            </button>
-          ))}
-        </div>
+        <h1 className="ph-title">What are you two in the mood for?</h1>
+        {MOODS.map((m) => (
+          <section key={m.id} className="mood">
+            <h2>{m.label}</h2>
+            <p className="mood-note">{m.note}</p>
+            <div className="acts">
+              {ACT_ORDER.filter((id) => ACTS[id].mood === m.id).map((id) => (
+                <button key={id} className="actcard" style={tintStyle(ACTS[id].tint)} onClick={() => send({ type: 'choose', act: id })}>
+                  <span className="e" aria-hidden="true">{ACTS[id].emoji}</span>
+                  <span className="t">{ACTS[id].title}</span>
+                  <span className="b">{ACTS[id].blurb}</span>
+                  <span className="m">{ACTS[id].time}{ACTS[id].badge ? `. ${ACTS[id].badge}` : ''}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
       </main>
     );
   }
 
   if (s.phase === 'rules') {
     return (
-      <main className="phone">
+      <main className="phone" style={tintStyle(act.tint)}>
+        <p className="big-emoji" aria-hidden="true">{act.emoji}</p>
         <h1 className="ph-title">{act.title}</h1>
         <ul className="rules">{[...RULES.base, RULES[act.kind]].map((r) => <li key={r}>{r}</li>)}</ul>
         <div className="row">
@@ -184,15 +195,30 @@ export default function Phone() {
     return <Write key={akey(s)} view={view} sess={sess} ping={ping} />;
   }
 
+  if (s.phase === 'reveal' && act.kind === 'match') {
+    const steps = revealSteps(act);
+    return (
+      <main className="phone" style={tintStyle(act.tint)}>
+        <p className="who">{s.k + 1} of {steps}</p>
+        <h1 className="ph-title">Look at the TV.</h1>
+        <p className="lede">Take turns saying why you picked yours. If you matched, enjoy it for a second.</p>
+        <div className="row">
+          {s.k > 0 && <button className="btn ghost" onClick={() => send({ type: 'back' })}>Back</button>}
+          <button className="btn primary grow" onClick={() => send({ type: 'next' })}>{s.k < steps - 1 ? 'Next' : 'See the results'}</button>
+        </div>
+      </main>
+    );
+  }
+
   if (s.phase === 'reveal') {
     const { idx, presenter, listener } = revealTurn(s.k);
     const n = act.items.length;
     if (me === presenter) {
       return (
-        <main className="phone">
+        <main className="phone" style={tintStyle(act.tint)}>
           <p className="who">{act.stem ? `Sentence ${idx + 1}` : `Exhibit ${idx + 1}`} of {n}</p>
-          <h1 className="ph-title">Your turn to present.</h1>
-          <p className="lede">{act.stem ? 'Read your answer from the TV, then say a little about why.' : 'Your exhibit is on the TV. Tell the story behind it.'}</p>
+          <h1 className="ph-title">Your turn to share. <span className="heart" aria-hidden="true">♥</span></h1>
+          <p className="lede">{act.stem ? 'Read yours from the TV, then say a little about why.' : 'Yours is on the TV. Tell the story behind it.'}</p>
           <div className="row">
             {s.k > 0 && <button className="btn ghost" onClick={() => send({ type: 'back' })}>Back</button>}
             <button className="btn primary grow" onClick={() => send({ type: 'next' })}>{s.k < n * 2 - 1 ? 'Next' : 'Finish'}</button>
@@ -202,7 +228,7 @@ export default function Phone() {
     }
     return (
       <main className="phone">
-        <p className="who">{nm(listener === me ? presenter : listener)} is presenting</p>
+        <p className="who">{nm(presenter)} is sharing</p>
         <h1 className="ph-title">You’re listening.</h1>
         <div className="listen">
           <p>You can only say things like</p>
@@ -216,7 +242,7 @@ export default function Phone() {
     if (me === s.o) return <MapOwner key={`${akey(s)}-${s.o}-${s.i}`} view={view} sess={sess} ping={ping} send={send} />;
     return (
       <main className="phone">
-        <p className="who">Your map of {nm(s.o)}’s world</p>
+        <p className="who">Your guesses about {nm(s.o)}</p>
         <h1 className="ph-title">Listen to {nm(s.o)}.</h1>
         <p className="lede">Ask about whatever you missed. Don’t defend your guess.</p>
       </main>
@@ -251,10 +277,11 @@ export default function Phone() {
   // end
   return (
     <main className="phone">
-      <h1 className="ph-title">That’s the whole exhibit.</h1>
-      <p className="lede">Take your time with the TV. When you’re ready, you can play another activity or finish.</p>
+      <p className="big-emoji" aria-hidden="true">🤍</p>
+      <h1 className="ph-title">That’s a wrap on this one.</h1>
+      <p className="lede">Take your time with the TV. When you’re ready, play another or finish for tonight.</p>
       <div className="opts">
-        <button className="btn primary wide" onClick={() => send({ type: 'menu' })}>Play another activity</button>
+        <button className="btn primary wide" onClick={() => send({ type: 'menu' })}>Play another game</button>
         <button className="btn ghost wide" onClick={() => send({ type: 'erase' })}>Finish and erase everything</button>
       </div>
     </main>
@@ -286,9 +313,37 @@ function Write({ view, sess, ping }: SubProps) {
     const pc = Math.min(countFor(view, key, partner), n);
     return (
       <main className="phone">
+        <p className="big-emoji" aria-hidden="true">✨</p>
         <h1 className="ph-title">You’re done.</h1>
         <p className="lede">{pc >= n ? 'Look at the TV.' : `Waiting for ${partnerName}. ${pc} of ${n} so far.`}</p>
         <button className="btn ghost" onClick={() => setIdx(0)}>Review my answers</button>
+      </main>
+    );
+  }
+
+  if (act.kind === 'match') {
+    const it = act.items[idx];
+    const choose = async (c: 'a' | 'b') => {
+      setSaving(true); setErr('');
+      try {
+        await rpc('us_again_submit_answer', { p_room: sess.room, p_token: sess.token, p_activity: key, p_item: idx, p_body: { c, text: c === 'a' ? it.a : it.b } });
+        ping();
+        setIdx(idx + 1);
+      } catch { setErr('Couldn’t save that. Check your connection and try again.'); }
+      finally { setSaving(false); }
+    };
+    return (
+      <main className="phone" style={tintStyle(act.tint)}>
+        <div className="progress" aria-hidden="true">{Array.from({ length: n }, (_, j) => <i key={j} className={j <= idx ? 'on' : ''} />)}</div>
+        <p className="who">Picking in secret. {idx + 1} of {n}</p>
+        <h1 className="prompt">{it.t}</h1>
+        <div className="vs">
+          <button className="pickbtn" disabled={saving} onClick={() => choose('a')}>{it.a}</button>
+          <span className="or" aria-hidden="true">or</span>
+          <button className="pickbtn alt" disabled={saving} onClick={() => choose('b')}>{it.b}</button>
+        </div>
+        <p className="note" role="alert">{err}</p>
+        {idx > 0 && <button className="btn ghost" onClick={() => setIdx(idx - 1)}>Back</button>}
       </main>
     );
   }
@@ -311,7 +366,7 @@ function Write({ view, sess, ping }: SubProps) {
   };
 
   return (
-    <main className="phone">
+    <main className="phone" style={tintStyle(act.tint)}>
       <div className="progress" aria-hidden="true">{Array.from({ length: n }, (_, j) => <i key={j} className={j <= idx ? 'on' : ''} />)}</div>
       <p className="who">Only you can see this. {idx + 1} of {n}</p>
       <h1 className="prompt">{prompt}</h1>
@@ -343,7 +398,7 @@ function MapOwner({ view, sess, ping, send }: SubProps) {
   return (
     <main className="phone">
       <p className="who">{playerName(view, 1 - sess.slot)}’s map of your world. {s.i + 1} of {n}</p>
-      <h1 className="ph-title">How close is it?</h1>
+      <h1 className="ph-title">How close is it?{r === 0 && <Burst />}</h1>
       <p className="lede">Their guess is on the TV. Pick one, then say it out loud.</p>
       <div className="opts">
         {MAPR.map((m, j) => (

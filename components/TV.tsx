@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { rpc, roomChannel } from '@/lib/supabase';
-import { ACTS, ACT_ORDER, MAPR, RULES, itemText } from '@/lib/activities';
+import { ACTS, ACT_ORDER, MAPR, MOODS, RULES, itemText } from '@/lib/activities';
+import { Burst, Hearts, tintStyle } from './Deco';
 import {
   type Action, type Answer, type GameState, type RoomView,
-  akey, autoAdvance, countFor, findAnswer, normalize, playerName, reduce, revealTurn,
+  akey, autoAdvance, countFor, findAnswer, normalize, playerName, reduce, revealSteps, revealTurn,
 } from '@/lib/game';
 
 const HOST_KEY = 'usagain-host';
@@ -149,13 +150,15 @@ export default function TV() {
   if (ended) {
     return (
       <main className="tv tv-center">
+        <Hearts />
+        <p className="tv-emoji" aria-hidden="true">🤍</p>
         <h1 className="tv-title">Everything you wrote has been erased.</h1>
-        <p className="tv-lede">Thank you for making time for each other.</p>
+        <p className="tv-lede">Thank you for making time for each other tonight.</p>
         <button className="btn primary" onClick={newSession}>Start a new session</button>
       </main>
     );
   }
-  if (!view) return <main className="tv tv-center"><p className="tv-lede">Setting up your room…</p></main>;
+  if (!view) return <main className="tv tv-center"><Hearts count={10} /><p className="tv-lede">Setting up your room…</p></main>;
 
   const s = view.state;
   const name = (slot: number) => playerName(view, slot);
@@ -163,18 +166,24 @@ export default function TV() {
 
   if (s.phase === 'lobby') {
     const host = origin.replace(/^https?:\/\//, '');
+    const both = view.players.length >= 2;
     return (
       <main className="tv tv-lobby">
-        <div>
-          <p className="brand-lg">Us, Again</p>
-          <p className="tv-lede">On your phones, go to <strong>{host}/play</strong> or scan the code, then enter</p>
-          <div className="tv-code" aria-label={`Room code ${view.code}`}>{view.code}</div>
-          <ul className="tv-players">
+        <Hearts />
+        <div className="lobby-main">
+          <p className="brand-lg">Us, Again <span className="heart" aria-hidden="true">♥</span></p>
+          <p className="tv-lede">Get cozy. On your phones, go to <strong>{host}/play</strong> or scan the code, then enter</p>
+          <div className="tv-code" aria-label={`Room code ${view.code}`}>
+            {view.code.split('').map((c, i) => <span key={i} style={{ animationDelay: `${i * 90}ms` }}>{c}</span>)}
+          </div>
+          <div className={`tv-pair ${both ? 'both' : ''}`}>
             {[0, 1].map((i) => {
-              const p = view.players.find((x) => x.slot === i);
-              return <li key={i} className={p ? 'in' : ''}>{p ? `${p.name} is here` : 'Waiting…'}</li>;
-            })}
-          </ul>
+              const pl = view.players.find((x) => x.slot === i);
+              return (
+                <span key={i} className={`chip ${pl ? 'in' : ''}`}>{pl ? pl.name : 'Waiting…'}</span>
+              );
+            }).reduce<React.ReactNode[]>((acc, el, i) => (i ? [...acc, <span key="h" className="pair-heart" aria-hidden="true">♥</span>, el] : [el]), [])}
+          </div>
         </div>
         {qr && <div className="tv-qr" dangerouslySetInnerHTML={{ __html: qr }} />}
       </main>
@@ -183,25 +192,34 @@ export default function TV() {
 
   if (s.phase === 'menu' || !act) {
     return (
-      <main className="tv">
-        <h1 className="tv-title">Pick an activity on either phone.</h1>
-        <p className="tv-lede">You’re not trying to fix anything tonight. You’re remembering who this person is, and learning who they are right now.</p>
-        <ul className="tv-acts">
-          {ACT_ORDER.map((id) => (
-            <li key={id}>
-              <span className="t">{ACTS[id].title}</span>
-              <span className="b">{ACTS[id].blurb}</span>
-              <span className="m">{ACTS[id].time}{ACTS[id].first ? '. A good one to start with.' : ''}</span>
-            </li>
+      <main className="tv tv-menu">
+        <Hearts count={10} />
+        <h1 className="tv-title">{name(0)} <span className="heart" aria-hidden="true">♥</span> {name(1)}, what are you in the mood for?</h1>
+        <p className="tv-lede">Pick on either phone. You’re not trying to fix anything tonight, just to find each other again.</p>
+        <div className="tv-moods">
+          {MOODS.map((m) => (
+            <section key={m.id}>
+              <h2>{m.label}</h2>
+              <ul className="tv-acts">
+                {ACT_ORDER.filter((id) => ACTS[id].mood === m.id).map((id) => (
+                  <li key={id} style={tintStyle(ACTS[id].tint)}>
+                    <span className="e" aria-hidden="true">{ACTS[id].emoji}</span>
+                    <span className="t">{ACTS[id].title}</span>
+                    <span className="m">{ACTS[id].time}{ACTS[id].badge ? `. ${ACTS[id].badge}` : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       </main>
     );
   }
 
   if (s.phase === 'rules') {
     return (
-      <main className="tv">
+      <main className="tv" style={tintStyle(act.tint)}>
+        <p className="tv-emoji" aria-hidden="true">{act.emoji}</p>
         <h1 className="tv-title">{act.title}</h1>
         <p className="tv-lede">{act.blurb}</p>
         <ul className="tv-rules">{[...RULES.base, RULES[act.kind]].map((r) => <li key={r}>{r}</li>)}</ul>
@@ -214,19 +232,21 @@ export default function TV() {
 
   if (s.phase === 'write') {
     const key = akey(s);
+    const lede = act.kind === 'map' ? 'Each of you is guessing about the other.'
+      : act.kind === 'match' ? 'Each of you is picking in secret.'
+      : 'Each of you is writing privately.';
     return (
-      <main className="tv tv-center">
+      <main className="tv tv-center" style={tintStyle(act.tint)}>
+        <p className="tv-emoji" aria-hidden="true">{act.emoji}</p>
         <h1 className="tv-title">Answer on your phones.</h1>
-        <p className="tv-lede">
-          {act.kind === 'map' ? 'Each of you is mapping the other’s world.' : 'Each of you is writing privately.'} Nothing shows up here until you’re both done.
-        </p>
+        <p className="tv-lede">{lede} Nothing shows up here until you’re both done.</p>
         <div className="tv-progress">
           {[0, 1].map((slot) => {
             const c = Math.min(countFor(view, key, slot), n);
             return (
               <div key={slot} className="tv-prog-row">
                 <span className="nm">{name(slot)}</span>
-                <span className="bar" aria-hidden="true">{Array.from({ length: n }, (_, j) => <i key={j} className={j < c ? 'on' : ''} />)}</span>
+                <span className="bar" aria-hidden="true">{Array.from({ length: n }, (_, j) => <i key={j} className={j < c ? 'on' : ''}>♥</i>)}</span>
                 <span className="ct">{c === n ? 'Done' : `${c} of ${n}`}</span>
               </div>
             );
@@ -236,13 +256,36 @@ export default function TV() {
     );
   }
 
+  if (s.phase === 'reveal' && act.kind === 'match') {
+    const idx = s.k;
+    const picks = [0, 1].map((slot) => findAnswer(answers[akey(s)], slot, idx)?.body);
+    const matched = !!picks[0]?.c && picks[0]?.c === picks[1]?.c;
+    return (
+      <main className="tv" style={tintStyle(act.tint)}>
+        <p className="tv-step">{idx + 1} of {revealSteps(act)}</p>
+        <h1 className="tv-title">{act.items[idx].t}</h1>
+        <div className="tv-match pop" key={s.k}>
+          {[0, 1].map((slot) => (
+            <div key={slot} className={`pick ${matched ? 'same' : ''}`}>
+              <span className="who-nm">{name(slot)}</span>
+              <span className="choice">{picks[slot]?.text}</span>
+            </div>
+          ))}
+        </div>
+        <p className={`verdict-big ${matched ? 'yes' : ''}`} key={`v${s.k}`}>
+          {matched ? <>It’s a match! <Burst /></> : 'Different picks. Ask each other why.'}
+        </p>
+      </main>
+    );
+  }
+
   if (s.phase === 'reveal') {
     const { idx, presenter, listener } = revealTurn(s.k);
     const a = findAnswer(answers[akey(s)], presenter, idx);
     return (
-      <main className="tv">
-        <p className="tv-step">{act.stem ? `Sentence ${idx + 1} of ${n}` : `Exhibit ${idx + 1} of ${n}`}. {name(presenter)} presents, {name(listener)} listens.</p>
-        <div className="tv-placard">
+      <main className="tv" style={tintStyle(act.tint)}>
+        <p className="tv-step">{act.stem ? `Note ${idx + 1} of ${n}` : `Exhibit ${idx + 1} of ${n}`}. {name(presenter)} shares, {name(listener)} listens.</p>
+        <div className="tv-placard pop" key={s.k}>
           {act.stem ? (
             <p className="ans"><span className="stem">{act.items[idx].t.replace('…', '')}</span> {a?.body.text}</p>
           ) : (
@@ -251,7 +294,7 @@ export default function TV() {
               <p className="ans">{a?.body.text}</p>
             </>
           )}
-          <p className="cap">{act.stem ? `${name(presenter)}’s answer` : `Curated by ${name(presenter)}`}</p>
+          <p className="cap"><span className="heart" aria-hidden="true">♥</span> {act.stem ? `From ${name(presenter)}` : `Curated by ${name(presenter)}`}</p>
         </div>
       </main>
     );
@@ -262,13 +305,13 @@ export default function TV() {
     const guess = findAnswer(answers[akey(s)], guesser, s.i);
     const resp = findAnswer(answers[akey(s, '-r')], owner, s.i);
     return (
-      <main className="tv">
-        <p className="tv-step">{name(guesser)}’s map of {name(owner)}’s world. {s.i + 1} of {n}</p>
-        <div className="tv-placard">
+      <main className="tv" style={tintStyle(act.tint)}>
+        <p className="tv-step">{name(guesser)}’s guesses about {name(owner)}. {s.i + 1} of {n}</p>
+        <div className="tv-placard pop" key={`${s.o}-${s.i}`}>
           <p className="ttl">{itemText(act, s.i, name(owner))}</p>
           <p className="ans">{guess?.body.text}</p>
-          <p className={`verdict ${resp?.body.r != null ? 'on' : ''}`}>
-            {resp?.body.r != null ? MAPR[resp.body.r] : `${name(owner)}, how close is it?`}
+          <p className={`verdict ${resp?.body.r != null ? 'on' : ''}`} key={resp?.body.r ?? 'none'}>
+            {resp?.body.r != null ? <>{MAPR[resp.body.r]}{resp.body.r === 0 && <Burst />}</> : `${name(owner)}, how close is it?`}
           </p>
         </div>
       </main>
@@ -280,17 +323,16 @@ export default function TV() {
     const pick = findAnswer(answers[akey(s)], drafter, s.d);
     const alt = findAnswer(answers[akey(s, '-alt')], other, s.d);
     return (
-      <main className="tv">
-        <p className="tv-step">Round {s.d + 1} of {n}. {name(drafter)} drafts.</p>
+      <main className="tv" style={tintStyle(act.tint)}>
+        <p className="tv-step">Round {s.d + 1} of {n}. {name(drafter)} is on the clock.</p>
         <h1 className="tv-title">{act.items[s.d].t}</h1>
         {s.dsub === 'pick' ? (
           <p className="tv-lede">{name(drafter)} is choosing a memory…</p>
         ) : (
-          <div className="tv-placard">
+          <div className="tv-placard pop" key={s.d}>
             <p className="ans">{pick?.body.text}</p>
-            <p className="cap">
-              {name(drafter)}’s pick{alt?.body.steal ? `, stolen by ${name(other)}` : ''}
-            </p>
+            <p className="cap"><span className="heart" aria-hidden="true">♥</span> {name(drafter)}’s pick</p>
+            {alt?.body.steal && <p className="verdict on" key="steal">Stolen by {name(other)}! You both treasure this one. <Burst /></p>}
             {alt?.body.text && <p className="alt"><strong>{name(other)} would have picked:</strong> {alt.body.text}</p>}
           </div>
         )}
@@ -300,9 +342,14 @@ export default function TV() {
 
   // End: the keepsake
   const main = answers[akey(s)];
+  const matches = act.kind === 'match'
+    ? act.items.filter((_, j) => { const a = findAnswer(main, 0, j)?.body.c; return !!a && a === findAnswer(main, 1, j)?.body.c; }).length
+    : 0;
   return (
-    <main className="tv">
-      <h1 className="tv-title">That’s the whole exhibit.</h1>
+    <main className="tv tv-end" style={tintStyle(act.tint)}>
+      <Hearts count={12} />
+      <p className="tv-emoji" aria-hidden="true">{act.emoji}</p>
+      <h1 className="tv-title">{act.kind === 'match' ? `You matched on ${matches} of ${n}.` : 'That’s the whole collection.'}</h1>
       <p className="tv-lede">Stay here a while. Talk about whatever surprised you. When you finish on your phones, all of this is erased.</p>
       <div className="tv-keep">
         {act.kind === 'draft' ? (
@@ -319,10 +366,23 @@ export default function TV() {
               );
             })}
           </section>
+        ) : act.kind === 'match' ? (
+          <section>
+            {act.items.map((it, j) => {
+              const a0 = findAnswer(main, 0, j)?.body, a1 = findAnswer(main, 1, j)?.body;
+              const same = !!a0?.c && a0.c === a1?.c;
+              return (
+                <div className="item" key={j}>
+                  <p className="q">{it.t}{same ? ' ♥' : ''}</p>
+                  <p className="a">{same ? a0?.text : `${name(0)}: ${a0?.text ?? ''}. ${name(1)}: ${a1?.text ?? ''}.`}</p>
+                </div>
+              );
+            })}
+          </section>
         ) : (
           [0, 1].map((slot) => (
             <section key={slot}>
-              <h2>{act.kind === 'map' ? `${name(slot)}’s world` : `${name(slot)}’s ${act.stem ? 'answers' : 'exhibits'}`}</h2>
+              <h2>{act.kind === 'map' ? `All about ${name(slot)}` : `From ${name(slot)}`}</h2>
               {act.items.map((it, j) => {
                 if (act.kind === 'map') {
                   const r = findAnswer(answers[akey(s, '-r')], slot, j)?.body.r;

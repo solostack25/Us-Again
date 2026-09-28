@@ -1,4 +1,4 @@
-import { ACTS, type ActId } from './activities';
+import { ACTS, type ActId, type Activity } from './activities';
 
 export type Phase = 'lobby' | 'menu' | 'rules' | 'write' | 'reveal' | 'mapReveal' | 'draft' | 'end';
 
@@ -17,7 +17,7 @@ export const initialState: GameState = { v: 0, phase: 'lobby', round: 0, k: 0, o
 
 export interface Player { slot: number; name: string }
 export interface Submitted { slot: number; activity: string; item: number }
-export interface Answer { slot: number; item: number; body: { text?: string; r?: number; steal?: boolean } }
+export interface Answer { slot: number; item: number; body: { text?: string; r?: number; steal?: boolean; c?: 'a' | 'b' } }
 export interface RoomView { code: string; state: GameState; you: 'host' | number; players: Player[]; submitted: Submitted[] }
 
 export type Action =
@@ -77,7 +77,7 @@ export function reduce(s: GameState, a: Action): GameState | null {
     case 'next': {
       if (!s.act) return null;
       const n = ACTS[s.act].items.length;
-      if (s.phase === 'reveal') return s.k < n * 2 - 1 ? bump(s, { k: s.k + 1 }) : bump(s, { phase: 'end' });
+      if (s.phase === 'reveal') return s.k < revealSteps(ACTS[s.act]) - 1 ? bump(s, { k: s.k + 1 }) : bump(s, { phase: 'end' });
       if (s.phase === 'mapReveal') {
         if (s.i < n - 1) return bump(s, { i: s.i + 1 });
         if (s.o === 0) return bump(s, { o: 1, i: 0 });
@@ -108,4 +108,9 @@ export function revealTurn(k: number) {
   const idx = Math.floor(k / 2);
   const presenter = (k + idx) % 2;
   return { idx, presenter, listener: 1 - presenter };
+}
+
+/** Number of reveal steps: match games reveal both picks at once; others alternate presenters. */
+export function revealSteps(act: Activity) {
+  return act.kind === 'match' ? act.items.length : act.items.length * 2;
 }
