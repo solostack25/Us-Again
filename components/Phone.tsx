@@ -181,6 +181,7 @@ export default function Phone() {
             </div>
           </section>
         ))}
+        <EndSession send={send} />
       </main>
     );
   }
@@ -299,6 +300,25 @@ export default function Phone() {
         <button className="btn ghost wide" onClick={() => send({ type: 'erase' })}>Finish and erase everything</button>
       </div>
     </main>
+  );
+}
+
+function EndSession({ send }: { send: (a: Action) => void }) {
+  const [sure, setSure] = useState(false);
+  return (
+    <div className="end-session">
+      {sure ? (
+        <>
+          <p className="hint">This erases everything you both wrote and gives the TV a fresh code.</p>
+          <div className="row">
+            <button className="btn ghost grow" onClick={() => setSure(false)}>Keep playing</button>
+            <button className="btn primary grow" onClick={() => send({ type: 'erase' })}>End and erase</button>
+          </div>
+        </>
+      ) : (
+        <button className="link-btn" onClick={() => setSure(true)}>End this session</button>
+      )}
+    </div>
   );
 }
 

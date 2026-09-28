@@ -49,6 +49,9 @@ export default function TV() {
     let cancelled = false;
     (async () => {
       try {
+        // /tv?new starts a fresh room (and shows a new code) even if one was open.
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('new')) { writeSaved(null); window.history.replaceState(null, '', '/tv'); }
         const saved = readSaved();
         if (saved) {
           try {
