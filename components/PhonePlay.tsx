@@ -6,6 +6,7 @@ import { ACTS, DOODLE_ROUNDS, DOODLE_SECONDS, PORTRAIT_SECONDS, STORY_LINES, TUN
 import { type Action, type Body, type RoomView, akey, doodlePrompt, meldSeed, playerName, spectrum, storyOpener } from '@/lib/game';
 import { DrawPad, type DrawPadHandle, type StrokeEvent } from './Canvas';
 import { tintStyle } from './Deco';
+import { PhoneBoard } from './Boards';
 
 export type PSess = { room: string; token: string; slot: number; code: string };
 export interface PlayProps {
@@ -65,6 +66,7 @@ export function PhonePlay(props: PlayProps) {
     case 'doodle': return <Doodle key={k} {...props} />;
     case 'tune': return <Tune key={k} {...props} />;
     case 'beat': return <Beat key={k} {...props} />;
+    case 'board': return <PhoneBoard view={view} slot={props.sess.slot} send={props.send} />;
     default: return null;
   }
 }

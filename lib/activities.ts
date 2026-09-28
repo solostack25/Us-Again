@@ -1,14 +1,17 @@
+import type { BoardGame } from './boards';
+
 export type ActId =
+  | 'ttt' | 'c4' | 'checkers' | 'mancala'
   | 'meld' | 'truths' | 'story' | 'portrait' | 'doodle' | 'tune' | 'beat'
   | 'thisthat' | 'quiz' | 'hits' | 'draft' | 'dreams'
   | 'museum' | 'map' | 'choose' | 'thennow' | 'thanks';
 export type Kind =
   | 'private' | 'map' | 'draft' | 'match'
-  | 'meld' | 'truths' | 'story' | 'portrait' | 'doodle' | 'tune' | 'beat';
-export type Mood = 'play' | 'light' | 'deep';
+  | 'meld' | 'truths' | 'story' | 'portrait' | 'doodle' | 'tune' | 'beat' | 'board';
+export type Mood = 'play' | 'classic' | 'light' | 'deep';
 
 /** Kinds that run in the live "play" phase instead of write-then-reveal. */
-export const PLAY_KINDS: Kind[] = ['meld', 'story', 'portrait', 'doodle', 'tune', 'beat'];
+export const PLAY_KINDS: Kind[] = ['meld', 'story', 'portrait', 'doodle', 'tune', 'beat', 'board'];
 
 export interface Prompt { t: string; h?: string; a?: string; b?: string }
 export interface Activity {
@@ -22,19 +25,39 @@ export interface Activity {
   items: Prompt[];
   stem?: boolean;
   badge?: string;
+  board?: BoardGame;
 }
 
 export const MOODS: { id: Mood; label: string; note: string }[] = [
   { id: 'play', label: 'Real games', note: 'Draw, guess, sync up, and play together.' },
+  { id: 'classic', label: 'Classic games', note: 'The ones you know, head to head on the big screen.' },
   { id: 'light', label: 'Light and playful', note: 'Warm-ups, laughs, and the good old days.' },
   { id: 'deep', label: 'Close and tender', note: 'Slower, softer, and a little braver.' },
 ];
 
-export const ACT_ORDER: ActId[] = ['meld', 'truths', 'story', 'portrait', 'doodle', 'tune', 'beat', 'thisthat', 'quiz', 'hits', 'draft', 'dreams', 'museum', 'map', 'choose', 'thennow', 'thanks'];
+export const ACT_ORDER: ActId[] = ['meld', 'truths', 'story', 'portrait', 'doodle', 'tune', 'beat', 'c4', 'checkers', 'mancala', 'ttt', 'thisthat', 'quiz', 'hits', 'draft', 'dreams', 'museum', 'map', 'choose', 'thennow', 'thanks'];
 
 const p = (t: string, h?: string): Prompt => ({ t, h });
 
 export const ACTS: Record<ActId, Activity> = {
+  // Classic games
+  c4: {
+    title: 'Connect Four', kind: 'board', board: 'c4', mood: 'classic', emoji: '🔴', tint: '#D93A72', time: '5 minutes a game',
+    blurb: 'Drop discs from your phone and get four in a row before your partner does.', items: [],
+  },
+  checkers: {
+    title: 'Checkers', kind: 'board', board: 'checkers', mood: 'classic', emoji: '⚫', tint: '#3A6FB0', time: '15 to 30 minutes',
+    blurb: 'The classic. Jump pieces, chain your jumps, and get crowned on the far side.', items: [],
+  },
+  mancala: {
+    title: 'Mancala', kind: 'board', board: 'mancala', mood: 'classic', emoji: '🪨', tint: '#B5722A', time: '10 minutes a game',
+    blurb: 'Sow stones around the board. Land in your store for an extra turn, or capture from across the way.', items: [],
+  },
+  ttt: {
+    title: 'Tic-tac-toe', kind: 'board', board: 'ttt', mood: 'classic', emoji: '❌', tint: '#23998C', time: '1 minute a game',
+    blurb: 'Hearts versus stars, best of as many as you like.', items: [],
+  },
+
   // Real games
   meld: {
     title: 'Mind meld', kind: 'meld', mood: 'play', emoji: '🧠', tint: '#8A63D2', time: '5 to 15 minutes', badge: 'Great opener',
@@ -193,6 +216,7 @@ export const RULES = {
   doodle: 'No letters or numbers in your drawing. Guess out loud as much as you want.',
   tune: 'Give one clue, then stay quiet. You score points together.',
   beat: 'Don’t talk and don’t count out loud. Just feel it.',
+  board: 'Take turns on your phones. The TV keeps score across games. Gloating is allowed, but only a little.',
 } as const;
 
 export const LISTEN = ['Tell me more about that.', 'What did that mean to you?', 'I didn’t realize you remembered that.'];

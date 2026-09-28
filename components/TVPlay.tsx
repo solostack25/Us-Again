@@ -7,6 +7,7 @@ import {
 } from '@/lib/game';
 import { Burst, Hearts, tintStyle } from './Deco';
 import { StrokeView, type Stroke } from './Canvas';
+import { TVBoard } from './Boards';
 
 export interface LiveProps {
   view: RoomView;
@@ -62,6 +63,8 @@ export function TVPlay({ view, answers, strokes, dial, pulse, elapsed }: LivePro
   const key = akey(s);
 
   switch (act.kind) {
+    case 'board':
+      return <TVBoard view={view} />;
     case 'meld': {
       const prevA = findAnswer(answers[key], 0, s.r - 1)?.body.text;
       const prevB = findAnswer(answers[key], 1, s.r - 1)?.body.text;

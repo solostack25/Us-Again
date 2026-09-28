@@ -1,3 +1,4 @@
+import { initBoard, play, type Board, type Move } from './boards';
 import {
   ACTS, DOODLE_PROMPTS, DOODLE_ROUNDS, MELD_SEEDS, SPECTRUMS, STORY_LINES, STORY_OPENERS, TUNE_ROUNDS,
   type ActId, type Activity,
@@ -25,11 +26,13 @@ export interface GameState {
   res: boolean[];       // doodle: whether each drawing was guessed
   pts: number[];        // tuned in: points per round
   beat?: BeatScore;
+  bd?: Board;           // classic board games
+  wins: [number, number];
 }
 
 export const initialState: GameState = {
   v: 0, phase: 'lobby', round: 0, k: 0, o: 0, i: 0, d: 0, dsub: 'pick',
-  r: 0, sub: '', seed: 0, target: 50, prev: '', res: [], pts: [],
+  r: 0, sub: '', seed: 0, target: 50, prev: '', res: [], pts: [], wins: [0, 0],
 };
 
 export interface Player { slot: number; name: string }
@@ -54,7 +57,8 @@ export type Action =
   | { type: 'erase' }
   | { type: 'result'; ok: boolean } // doodle: guessed or not
   | { type: 'go' }                  // heartbeat: start countdown
-  | { type: 'again' };              // replay a short game
+  | { type: 'again' }               // replay a short game
+  | { type: 'move'; slot: number; m: Move }; // classic board move
 
 export const normalize = (s: Partial<GameState> | null | undefined): GameState => ({ ...initialState, ...(s || {}) });
 export const akey = (s: GameState, suffix = '') => `${s.act}-${s.round}${suffix}`;
@@ -117,6 +121,7 @@ function startState(s: GameState, act: Activity): GameState {
     case 'doodle': return bump(s, { phase: 'play', sub: 'draw', r: 0, seed: rand(DOODLE_PROMPTS.length), res: [] });
     case 'tune': return bump(s, { phase: 'play', sub: 'clue', r: 0, seed: rand(SPECTRUMS.length), target: randTarget(), pts: [] });
     case 'beat': return bump(s, { phase: 'play', sub: 'ready', r: 0, beat: undefined });
+    case 'board': return bump(s, { phase: 'play', sub: 'turn', bd: initBoard(act.board!, s.round % 2) });
     default: return bump(s, { phase: 'write' });
   }
 }
@@ -175,7 +180,7 @@ export function reduce(s: GameState, a: Action, ans: AnswerMap = {}): GameState 
       if (s.phase !== 'menu' && s.phase !== 'end' && s.phase !== 'rules') return null;
       return bump(s, { ...initialState, v: s.v, phase: 'rules', act: a.act, round: s.round + 1 });
     case 'menu':
-      if (s.phase !== 'end' && s.phase !== 'rules') return null;
+      if (s.phase !== 'end' && s.phase !== 'rules' && !(s.phase === 'play' && s.sub === 'over')) return null;
       return bump(s, { phase: 'menu' });
     case 'start':
       if (s.phase !== 'rules' || !s.act) return null;
@@ -183,6 +188,17 @@ export function reduce(s: GameState, a: Action, ans: AnswerMap = {}): GameState 
     case 'again':
       if (!s.act || (s.phase !== 'end' && s.phase !== 'play')) return null;
       return startState(bump(s, { round: s.round + 1 }), ACTS[s.act]);
+    case 'move': {
+      if (s.phase !== 'play' || s.sub !== 'turn' || !s.act || !s.bd) return null;
+      const game = ACTS[s.act].board;
+      if (!game) return null;
+      const bd = play(game, s.bd, a.slot, a.m);
+      if (!bd) return null;
+      if (bd.winner === null) return bump(s, { bd });
+      const wins: [number, number] = [...s.wins];
+      if (bd.winner >= 0) wins[bd.winner]++;
+      return bump(s, { bd, wins, sub: 'over' });
+    }
     case 'go':
       return s.phase === 'play' && s.act === 'beat' && s.sub === 'ready' ? bump(s, { sub: 'count' }) : null;
     case 'result':

@@ -312,3 +312,75 @@ textarea.short { min-height: 110px; font-size: 20px; }
   .tv-doodle { flex-direction: column; }
   .gallery.four { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---- Classic board games ---- */
+.tv-board { flex-direction: row; align-items: center; justify-content: space-between; gap: 4vw; }
+.board-side { flex: 1; min-width: 0; }
+.board-wrap { flex-shrink: 0; width: min(52vw, 84vh); }
+.tv-board.g-mancala .board-wrap { width: min(62vw, 110vh); }
+.note-line { min-height: 1.5em; color: var(--tint, var(--accent)); font-weight: 800; animation: pop .4s ease-out; }
+.scoreboard { display: flex; gap: 12px; flex-wrap: wrap; margin: 0 0 16px; }
+.tv .scoreboard { gap: 1.4vw; margin-bottom: 3vh; font-size: clamp(20px, 2vw, 44px); }
+.sb { padding: .4em 1em; border-radius: 999px; background: var(--surface); font-weight: 800; border: 2px solid transparent; transition: border-color .3s ease, transform .3s ease; }
+.sb b { font-family: var(--serif); font-size: 1.2em; margin: 0 .2em; }
+.sb.p0 { color: var(--accent); }
+.sb.p1 { color: #B7791F; }
+.sb.turn { border-color: currentColor; transform: scale(1.05); }
+.bd { width: 100%; user-select: none; -webkit-user-select: none; }
+.bd button { font: inherit; }
+/* piece colors: slot 0 rose, slot 1 honey */
+.bd .p0 { --pc: var(--accent); }
+.bd .p1 { --pc: var(--honey); }
+/* tic-tac-toe */
+.ttt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3%; aspect-ratio: 1; }
+.ttt .cell { aspect-ratio: 1; border: 0; border-radius: 18%; background: var(--surface); color: var(--pc); font-size: clamp(40px, 10vw, 160px); line-height: 1; cursor: pointer; display: grid; place-items: center; transition: transform .15s ease; }
+.tv .ttt .cell { font-size: min(11vw, 18vh); }
+.ttt .cell:disabled { cursor: default; }
+.ttt .cell.last { animation: pop .4s cubic-bezier(.2, .9, .3, 1.4); }
+.ttt .cell.win { background: color-mix(in srgb, var(--pc) 22%, var(--surface)); }
+/* connect four */
+.c4-drops { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2%; margin-bottom: 8px; }
+.c4-drops .drop { border: 0; border-radius: 12px; padding: 10px 0; background: var(--tint, var(--accent)); color: var(--accent-ink); font-size: 18px; cursor: pointer; }
+.c4-drops .drop:disabled { opacity: .3; }
+.c4-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2.2%; padding: 3%; border-radius: 6%; background: #3B5BA9; aspect-ratio: 7 / 6; box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .18); }
+.c4-grid .hole { border-radius: 50%; background: var(--bg); aspect-ratio: 1; box-shadow: inset 0 3px 6px rgba(0, 0, 0, .25); }
+.c4-grid .hole.p0, .c4-grid .hole.p1 { background: var(--pc); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .2); }
+.c4-grid .hole.last { animation: drop .45s cubic-bezier(.3, 1.4, .5, 1); }
+.c4-grid .hole.win { outline: 4px solid #fff; outline-offset: -4px; }
+@keyframes drop { from { transform: translateY(-300%); } to { transform: none; } }
+/* checkers */
+.checkers { display: grid; grid-template-columns: repeat(8, 1fr); aspect-ratio: 1; border-radius: 3%; overflow: hidden; border: 6px solid #6B3F2A; }
+.checkers .sq { border: 0; padding: 0; aspect-ratio: 1; display: grid; place-items: center; cursor: default; }
+.checkers .light { background: #F3DDC4; }
+.checkers .dark { background: #8C5A3C; }
+.checkers .sq.last { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .55); }
+.checkers .sq.movable { cursor: pointer; }
+.checkers .sq.movable .pc { box-shadow: 0 0 0 3px #fff, 0 4px 0 rgba(0, 0, 0, .25); }
+.checkers .sq.sel .pc { transform: scale(1.12); box-shadow: 0 0 0 4px var(--ink), 0 6px 0 rgba(0, 0, 0, .25); }
+.checkers .sq.target { cursor: pointer; background: color-mix(in srgb, #8C5A3C 60%, #fff); }
+.checkers .sq.target::after { content: ""; width: 30%; height: 30%; border-radius: 50%; background: rgba(255, 255, 255, .8); }
+.checkers .pc { width: 78%; height: 78%; border-radius: 50%; background: var(--pc); display: grid; place-items: center; color: #fff; font-size: clamp(12px, 3.6vw, 60px); box-shadow: 0 4px 0 rgba(0, 0, 0, .25); transition: transform .15s ease; }
+.tv .checkers .pc { font-size: min(3vw, 5vh); }
+/* mancala */
+.mancala { display: grid; grid-template-columns: 1fr 6fr 1fr; grid-template-rows: 1fr 1fr; gap: 2%; padding: 3%; border-radius: 12% / 30%; background: #B5722A; background: linear-gradient(180deg, #C4843A, #A5652A); box-shadow: inset 0 -8px 0 rgba(0, 0, 0, .15); }
+.mancala .row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3%; }
+.mancala .top { grid-column: 2; grid-row: 1; }
+.mancala .bottom { grid-column: 2; grid-row: 2; }
+.mancala .store.s1 { grid-column: 1; grid-row: 1 / 3; }
+.mancala .store.s0 { grid-column: 3; grid-row: 1 / 3; }
+.mancala .pit, .mancala .store { position: relative; border: 0; border-radius: 50%; background: rgba(60, 30, 10, .35); box-shadow: inset 0 6px 12px rgba(0, 0, 0, .35); display: grid; place-items: center; aspect-ratio: 1; color: #fff; }
+.mancala .store { border-radius: 999px; aspect-ratio: auto; }
+.mancala .store.s0 { outline: 3px solid var(--accent); outline-offset: -3px; }
+.mancala .store.s1 { outline: 3px solid var(--honey); outline-offset: -3px; }
+.mancala .n { position: relative; z-index: 1; font-family: var(--serif); font-weight: 700; font-size: clamp(16px, 4.5vw, 64px); text-shadow: 0 2px 4px rgba(0, 0, 0, .5); }
+.tv .mancala .n { font-size: min(3.4vw, 6vh); }
+.mancala .stones { position: absolute; inset: 18%; display: flex; flex-wrap: wrap; gap: 6%; align-content: center; justify-content: center; opacity: .75; }
+.mancala .stones i { width: 22%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #9AD1E8 60%, #4A8FB0); }
+.mancala .pit.last, .mancala .store.last { box-shadow: inset 0 6px 12px rgba(0, 0, 0, .35), 0 0 0 3px rgba(255, 255, 255, .6); }
+.mancala .pit.mine { cursor: pointer; box-shadow: inset 0 6px 12px rgba(0, 0, 0, .35), 0 0 0 3px var(--accent); }
+.mancala .pit.s1.mine { box-shadow: inset 0 6px 12px rgba(0, 0, 0, .35), 0 0 0 3px var(--honey); }
+.ph-board .bd { margin-top: 10px; }
+@media (max-width: 800px) {
+  .tv-board { flex-direction: column; }
+  .board-wrap, .tv-board.g-mancala .board-wrap { width: 100%; }
+}
