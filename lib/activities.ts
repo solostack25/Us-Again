@@ -1,8 +1,14 @@
 export type ActId =
+  | 'meld' | 'truths' | 'story' | 'portrait' | 'doodle' | 'tune' | 'beat'
   | 'thisthat' | 'quiz' | 'hits' | 'draft' | 'dreams'
   | 'museum' | 'map' | 'choose' | 'thennow' | 'thanks';
-export type Kind = 'private' | 'map' | 'draft' | 'match';
-export type Mood = 'light' | 'deep';
+export type Kind =
+  | 'private' | 'map' | 'draft' | 'match'
+  | 'meld' | 'truths' | 'story' | 'portrait' | 'doodle' | 'tune' | 'beat';
+export type Mood = 'play' | 'light' | 'deep';
+
+/** Kinds that run in the live "play" phase instead of write-then-reveal. */
+export const PLAY_KINDS: Kind[] = ['meld', 'story', 'portrait', 'doodle', 'tune', 'beat'];
 
 export interface Prompt { t: string; h?: string; a?: string; b?: string }
 export interface Activity {
@@ -19,15 +25,53 @@ export interface Activity {
 }
 
 export const MOODS: { id: Mood; label: string; note: string }[] = [
+  { id: 'play', label: 'Real games', note: 'Draw, guess, sync up, and play together.' },
   { id: 'light', label: 'Light and playful', note: 'Warm-ups, laughs, and the good old days.' },
   { id: 'deep', label: 'Close and tender', note: 'Slower, softer, and a little braver.' },
 ];
 
-export const ACT_ORDER: ActId[] = ['thisthat', 'quiz', 'hits', 'draft', 'dreams', 'museum', 'map', 'choose', 'thennow', 'thanks'];
+export const ACT_ORDER: ActId[] = ['meld', 'truths', 'story', 'portrait', 'doodle', 'tune', 'beat', 'thisthat', 'quiz', 'hits', 'draft', 'dreams', 'museum', 'map', 'choose', 'thennow', 'thanks'];
 
 const p = (t: string, h?: string): Prompt => ({ t, h });
 
 export const ACTS: Record<ActId, Activity> = {
+  // Real games
+  meld: {
+    title: 'Mind meld', kind: 'meld', mood: 'play', emoji: '🧠', tint: '#8A63D2', time: '5 to 15 minutes', badge: 'Great opener',
+    blurb: 'You both see a word and secretly type the first thing it makes you think of. Keep going until you land on the same word.',
+    items: [],
+  },
+  truths: {
+    title: 'Two truths and a memory', kind: 'truths', mood: 'play', emoji: '🕵️', tint: '#3B8FD6', time: '10 to 15 minutes',
+    blurb: 'Each of you writes three memories of your relationship, and one of them is made up. Can your partner spot the fake?',
+    items: [p('Three memories')],
+  },
+  story: {
+    title: 'The story of us', kind: 'story', mood: 'play', emoji: '📖', tint: '#E0584A', time: '10 to 15 minutes',
+    blurb: 'Write a story about your future one line at a time, seeing only the line before yours. Then read the whole thing aloud.',
+    items: [],
+  },
+  portrait: {
+    title: '60-second portraits', kind: 'portrait', mood: 'play', emoji: '🎨', tint: '#D9791A', time: '5 minutes',
+    blurb: 'Draw each other in 60 seconds, no peeking. Then unveil both masterpieces on the TV.',
+    items: [],
+  },
+  doodle: {
+    title: 'Doodle a memory', kind: 'doodle', mood: 'play', emoji: '✏️', tint: '#23998C', time: '10 to 20 minutes',
+    blurb: 'Take turns secretly drawing a shared memory while it appears live on the TV. Your partner guesses out loud.',
+    items: [],
+  },
+  tune: {
+    title: 'Tuned in', kind: 'tune', mood: 'play', emoji: '📻', tint: '#D93A72', time: '10 to 20 minutes',
+    blurb: 'One of you sees a secret spot on a scale and gives a clue. The other slides the dial to find it. You score together.',
+    items: [],
+  },
+  beat: {
+    title: 'Heartbeat', kind: 'beat', mood: 'play', emoji: '💓', tint: '#E0457B', time: '2 minutes', badge: 'Sweet closer',
+    blurb: 'Tap your phones for 20 seconds and try to fall into the same rhythm, without talking or counting.',
+    items: [],
+  },
+
   // Light and playful
   thisthat: {
     title: 'This or that', kind: 'match', mood: 'light', emoji: '💞', tint: '#E0457B', time: '10 to 15 minutes', badge: 'A good warm-up',
@@ -142,6 +186,13 @@ export const RULES = {
   map: 'When your answers are being guessed, don’t say “that’s wrong.” Say what they got right, what’s close, and what they didn’t know.',
   draft: 'If your partner drafts a memory you had too, you can steal it. Arguing about the details is half the fun.',
   match: 'Pick fast, explain slow. When you don’t match, get curious about why instead of convincing each other.',
+  meld: 'No talking while you type. The goal is to think alike, not to win.',
+  truths: 'Make the fake believable. After the reveal, tell the real stories behind the true ones.',
+  story: 'Only read the line you’re given. Go with it, however strange it gets.',
+  portrait: 'Draw what you love about their face, not just what you see. Nobody is allowed to be offended.',
+  doodle: 'No letters or numbers in your drawing. Guess out loud as much as you want.',
+  tune: 'Give one clue, then stay quiet. You score points together.',
+  beat: 'Don’t talk and don’t count out loud. Just feel it.',
 } as const;
 
 export const LISTEN = ['Tell me more about that.', 'What did that mean to you?', 'I didn’t realize you remembered that.'];
@@ -150,3 +201,31 @@ export const MAPR = ['You got this right', 'You’re close on this', 'Here’s s
 export function itemText(act: Activity, idx: number, aboutName: string): string {
   return act.items[idx].t.replace('{n}', aboutName);
 }
+
+// Content for the real games
+export const MELD_SEEDS = ['Beach', 'Coffee', 'Home', 'Rain', 'Wedding', 'Weekend', 'Pizza', 'Music', 'Dance', 'Stars', 'Road trip', 'Sunday',
+  'Kitchen', 'Movie', 'Winter', 'Garden', 'Laugh', 'Dream', 'Airport', 'Gift', 'Hug', 'Candle', 'Moon', 'Bread', 'Ocean', 'Tea', 'Book', 'City',
+  'Sweater', 'Picnic'];
+
+export const STORY_OPENERS = [
+  'It’s ten years from now, and we just…', 'The day we accidentally became famous started when…', 'Our dream house finally has…',
+  'On our 50th anniversary, we…', 'The strangest vacation we ever took began when…', 'Nobody believes us, but one night we…',
+];
+export const STORY_LINES = 10;
+
+export const DOODLE_PROMPTS = [
+  'Where we first met', 'Our first date', 'A trip we took together', 'A meal we love', 'Our favorite way to spend a Sunday',
+  'Something that always makes us laugh', 'A day we’ll never forget', 'Our dream vacation', 'Something one of us always loses',
+  'Our favorite place in town', 'How we spend a rainy day', 'The last thing we celebrated',
+];
+export const DOODLE_ROUNDS = 4;
+
+export const SPECTRUMS: [string, string][] = [
+  ['Cozy', 'Wild'], ['Cringe', 'Cute'], ['Terrible gift', 'Perfect gift'], ['Worst chore', 'Best chore'], ['Unromantic', 'Romantic'],
+  ['Easy to forgive', 'Hard to forgive'], ['Mild', 'Spicy'], ['Normal couple habit', 'Weird couple habit'], ['Overrated', 'Underrated'],
+  ['Morning thing', 'Night thing'], ['Needs a plan', 'Totally spontaneous'], ['Guilty pleasure', 'Proud pleasure'],
+];
+export const TUNE_ROUNDS = 6;
+export const PORTRAIT_SECONDS = 60;
+export const DOODLE_SECONDS = 75;
+export const BEAT_SECONDS = 20;

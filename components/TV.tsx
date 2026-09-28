@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { rpc, roomChannel } from '@/lib/supabase';
-import { ACTS, ACT_ORDER, MAPR, MOODS, RULES, itemText } from '@/lib/activities';
+import { ACTS, ACT_ORDER, BEAT_SECONDS, MAPR, MOODS, PLAY_KINDS, RULES, itemText } from '@/lib/activities';
+import { applyStrokeEvent, type Stroke, type StrokeEvent } from './Canvas';
+import { TVPlay, TVPlayEnd } from './TVPlay';
 import { Burst, Hearts, tintStyle } from './Deco';
 import {
-  type Action, type Answer, type GameState, type RoomView,
-  akey, autoAdvance, countFor, findAnswer, normalize, playerName, reduce, revealSteps, revealTurn,
+  type Action, type Answer, type AnswerMap, type GameState, type RoomView,
+  akey, autoAdvance, beatScore, countFor, findAnswer, normalize, playerName, reduce, revealSteps, revealTurn,
 } from '@/lib/game';
 
 const HOST_KEY = 'usagain-host';
@@ -31,6 +33,14 @@ export default function TV() {
   const viewRef = useRef<RoomView | null>(null);
   const endedRef = useRef(false);
   const actRef = useRef<((a: Action) => void) | null>(null);
+  const patchRef = useRef<((fn: (s: GameState) => GameState | null) => void) | null>(null);
+  const answersRef = useRef<AnswerMap>({});
+  const [strokes, setStrokes] = useState<Stroke[]>([]);
+  const [dial, setDial] = useState<number | null>(null);
+  const [pulse, setPulse] = useState<[number, number]>([0, 0]);
+  const taps = useRef<[number[], number[]]>([[], []]);
+  const stepStart = useRef(Date.now());
+  const [now, setNow] = useState(Date.now());
 
   // Create a room, or resume the one this TV already had open.
   useEffect(() => {
@@ -63,17 +73,27 @@ export default function TV() {
     const run = (fn: () => Promise<void>) => { queue = queue.then(fn).catch((e) => console.error(e)); };
     const ch: RealtimeChannel = roomChannel(session.id);
 
-    const loadAnswers = async (v: RoomView) => {
+    let lastSig = '';
+    const loadAnswers = async (v: RoomView): Promise<AnswerMap> => {
       const s = v.state;
-      if (!s.act || !['reveal', 'mapReveal', 'draft', 'end'].includes(s.phase)) return;
+      if (!s.act || !['reveal', 'mapReveal', 'draft', 'play', 'end'].includes(s.phase)) return answersRef.current;
+      const kind = ACTS[s.act].kind;
       const keys = [akey(s)];
-      if (ACTS[s.act].kind === 'map') keys.push(akey(s, '-r'));
-      if (ACTS[s.act].kind === 'draft') keys.push(akey(s, '-alt'));
-      const out: Record<string, Answer[]> = {};
+      if (kind === 'map') keys.push(akey(s, '-r'));
+      if (kind === 'draft') keys.push(akey(s, '-alt'));
+      if (kind === 'truths') keys.push(akey(s, '-g'));
+      if (kind === 'tune') keys.push(akey(s, '-c'), akey(s, '-g'));
+      // Skip the fetch when nothing new was submitted (drawings make answers heavy).
+      const sig = JSON.stringify([keys, v.submitted.filter((x) => keys.includes(x.activity))]);
+      if (sig === lastSig) return answersRef.current;
+      const out: AnswerMap = {};
       for (const k of keys) {
         out[k] = await rpc<Answer[]>('us_again_get_answers', { p_room: session.id, p_host_token: session.host, p_activity: k });
       }
+      lastSig = sig;
+      answersRef.current = out;
       setAnswers(out);
+      return out;
     };
 
     const commit = async (s: GameState) => {
@@ -92,9 +112,9 @@ export default function TV() {
         const v = { ...raw, state: normalize(raw.state) };
         viewRef.current = v;
         setView(v);
-        const next = autoAdvance(v);
+        const ans = await loadAnswers(v);
+        const next = autoAdvance(v, ans);
         if (next) await commit(next);
-        else await loadAnswers(v);
       } catch (e) {
         if (String(e).includes('room_not_found')) { endedRef.current = true; writeSaved(null); setEnded(true); }
       }
@@ -112,17 +132,32 @@ export default function TV() {
         setEnded(true);
         return;
       }
-      const next = reduce(cur.state, a);
+      const next = reduce(cur.state, a, answersRef.current);
       if (next) await commit(next);
     };
 
     ch.on('broadcast', { event: 'action' }, ({ payload }) => run(() => handle(payload.a as Action, payload.v as number)))
       .on('broadcast', { event: 'refresh' }, () => run(refresh))
+      .on('broadcast', { event: 'stroke' }, ({ payload }) => setStrokes((l) => applyStrokeEvent(l, payload as StrokeEvent)))
+      .on('broadcast', { event: 'dial' }, ({ payload }) => setDial(Number(payload.v)))
+      .on('broadcast', { event: 'tap' }, ({ payload }) => {
+        const st = viewRef.current?.state;
+        const slot = Number(payload.slot) === 1 ? 1 : 0;
+        if (st?.act !== 'beat' || st.sub !== 'tap') return;
+        taps.current[slot].push(performance.now());
+        setPulse((p) => (slot === 0 ? [p[0] + 1, p[1]] : [p[0], p[1] + 1]));
+      })
       .subscribe((status) => { if (status === 'SUBSCRIBED') run(refresh); });
 
     run(refresh);
     const timer = setInterval(() => run(refresh), 3000);
     actRef.current = (a) => run(() => handle(a));
+    patchRef.current = (fn) => run(async () => {
+      const cur = viewRef.current;
+      if (!cur || endedRef.current) return;
+      const next = fn(cur.state);
+      if (next) await commit(next);
+    });
     return () => { clearInterval(timer); ch.unsubscribe(); };
   }, [session]);
 
@@ -135,6 +170,40 @@ export default function TV() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Step clock: restarts whenever the game state changes; ticks while a timed step is on screen.
+  const sv = view?.state.v;
+  const st = view?.state;
+  useEffect(() => { stepStart.current = Date.now(); setNow(Date.now()); }, [sv]);
+  const timed = st?.phase === 'play' && ['draw', 'count', 'tap'].includes(st.sub);
+  useEffect(() => {
+    if (!timed) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [timed]);
+
+  // Fresh canvas and dial for each doodle / tuned-in round.
+  useEffect(() => { setStrokes([]); setDial(null); }, [st?.act, st?.round, st?.r]);
+
+  // Heartbeat: the TV runs the countdown and the tapping window, then scores it.
+  useEffect(() => {
+    if (!st || st.act !== 'beat' || st.phase !== 'play') return;
+    const v0 = st.v;
+    if (st.sub === 'count') {
+      const t = setTimeout(() => {
+        taps.current = [[], []];
+        patchRef.current?.((s) => (s.v === v0 && s.sub === 'count' ? { ...s, sub: 'tap', v: s.v + 1 } : null));
+      }, 3000);
+      return () => clearTimeout(t);
+    }
+    if (st.sub === 'tap') {
+      const t = setTimeout(() => {
+        patchRef.current?.((s) => (s.v === v0 && s.sub === 'tap'
+          ? { ...s, sub: 'show', beat: beatScore(taps.current[0], taps.current[1]), v: s.v + 1 } : null));
+      }, BEAT_SECONDS * 1000);
+      return () => clearTimeout(t);
+    }
+  }, [sv]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const code = view?.code;
   useEffect(() => {
@@ -229,11 +298,20 @@ export default function TV() {
   }
 
   const n = act.items.length;
+  const elapsed = (now - stepStart.current) / 1000;
+
+  if (s.phase === 'play') {
+    return <TVPlay view={view} answers={answers} strokes={strokes} dial={dial} pulse={pulse} elapsed={elapsed} />;
+  }
+  if (s.phase === 'end' && (PLAY_KINDS.includes(act.kind) || act.kind === 'truths')) {
+    return <TVPlayEnd view={view} answers={answers} />;
+  }
 
   if (s.phase === 'write') {
     const key = akey(s);
     const lede = act.kind === 'map' ? 'Each of you is guessing about the other.'
       : act.kind === 'match' ? 'Each of you is picking in secret.'
+      : act.kind === 'truths' ? 'Each of you is writing two true memories and one convincing fake.'
       : 'Each of you is writing privately.';
     return (
       <main className="tv tv-center" style={tintStyle(act.tint)}>

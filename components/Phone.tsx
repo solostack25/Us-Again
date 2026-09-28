@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { rpc, roomChannel } from '@/lib/supabase';
-import { ACTS, ACT_ORDER, LISTEN, MAPR, MOODS, RULES, itemText } from '@/lib/activities';
+import { ACTS, ACT_ORDER, LISTEN, MAPR, MOODS, PLAY_KINDS, RULES, itemText } from '@/lib/activities';
+import { PhonePlay, TruthsWrite } from './PhonePlay';
 import { Burst, tintStyle } from './Deco';
 import { type Action, type RoomView, akey, countFor, normalize, playerName, revealSteps, revealTurn } from '@/lib/game';
 
@@ -87,6 +88,7 @@ export default function Phone() {
     chRef.current?.send({ type: 'broadcast', event: 'action', payload: { a, v: viewRef.current?.state.v } });
   };
   const ping = () => { chRef.current?.send({ type: 'broadcast', event: 'refresh', payload: {} }); };
+  const emit = (event: string, payload: Record<string, unknown>) => { chRef.current?.send({ type: 'broadcast', event, payload }); };
 
   const join = async () => {
     setErr('');
@@ -192,7 +194,12 @@ export default function Phone() {
   }
 
   if (s.phase === 'write') {
+    if (act.kind === 'truths') return <TruthsWrite key={akey(s)} view={view} sess={sess} ping={ping} />;
     return <Write key={akey(s)} view={view} sess={sess} ping={ping} />;
+  }
+
+  if (s.phase === 'play') {
+    return <PhonePlay view={view} sess={sess} ping={ping} send={send} emit={emit} />;
   }
 
   if (s.phase === 'reveal' && act.kind === 'match') {
@@ -281,7 +288,8 @@ export default function Phone() {
       <h1 className="ph-title">That’s a wrap on this one.</h1>
       <p className="lede">Take your time with the TV. When you’re ready, play another or finish for tonight.</p>
       <div className="opts">
-        <button className="btn primary wide" onClick={() => send({ type: 'menu' })}>Play another game</button>
+        {PLAY_KINDS.includes(act.kind) && <button className="btn primary wide" onClick={() => send({ type: 'again' })}>Play this again</button>}
+        <button className={`btn ${PLAY_KINDS.includes(act.kind) ? 'ghost' : 'primary'} wide`} onClick={() => send({ type: 'menu' })}>Play another game</button>
         <button className="btn ghost wide" onClick={() => send({ type: 'erase' })}>Finish and erase everything</button>
       </div>
     </main>
