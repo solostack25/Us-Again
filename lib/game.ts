@@ -180,7 +180,8 @@ export function reduce(s: GameState, a: Action, ans: AnswerMap = {}): GameState 
       if (s.phase !== 'menu' && s.phase !== 'end' && s.phase !== 'rules') return null;
       return bump(s, { ...initialState, v: s.v, phase: 'rules', act: a.act, round: s.round + 1 });
     case 'menu':
-      if (s.phase !== 'end' && s.phase !== 'rules' && !(s.phase === 'play' && s.sub === 'over')) return null;
+      // Allowed from anywhere after the lobby, so a game can be quit midway.
+      if (s.phase === 'lobby' || s.phase === 'menu') return null;
       return bump(s, { phase: 'menu' });
     case 'start':
       if (s.phase !== 'rules' || !s.act) return null;

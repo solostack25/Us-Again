@@ -28,7 +28,10 @@ export function MusicTV() {
   const [kick, setKick] = useState(0);       // bump to retry feeding songs
   const [needsTap, setNeedsTap] = useState(false);
   const player = useRef<any>(null);
-  const sent = useRef<Set<string>>(new Set());
+  const issued = useRef(0);          // how many songs the list Spotify is playing contains
+  const playingIdx = useRef(-1);     // which of our songs is playing now
+  const lastUri = useRef('');
+  const tuned = useRef(false);       // repeat/shuffle set for this player
   const feeding = useRef(false);
   const songsRef = useRef<Queued[]>([]);
   const connectedRef = useRef(false);
@@ -60,6 +63,14 @@ export function MusicTV() {
       p.addListener('player_state_changed', (st: any) => {
         if (!st) { setNow(null); return; }
         const tr = st.track_window.current_track;
+        if (tr.uri !== lastUri.current) {
+          // Track which of our songs this is (search forward first, so repeated songs are counted right).
+          const list = songsRef.current;
+          let idx = list.findIndex((x, j) => j > playingIdx.current && x.uri === tr.uri);
+          if (idx < 0) idx = list.findIndex((x) => x.uri === tr.uri);
+          playingIdx.current = idx;
+          lastUri.current = tr.uri;
+        }
         setNow({ name: tr.name, artist: tr.artists.map((a: any) => a.name).join(', '), art: tr.album.images[0]?.url || '', paused: st.paused });
       });
       p.addListener('authentication_error', () => { sp.disconnect(); setConnected(false); setErr('Spotify signed out. Connect again.'); });
@@ -81,26 +92,33 @@ export function MusicTV() {
     return () => { player.current?.disconnect(); player.current = null; };
   }, [connected]);
 
-  // Feed new songs to the player: start playing if idle, otherwise add to the queue.
+  // Hand Spotify the whole song list as one context, so it plays straight through.
+  // When songs are added mid-song, re-send the longer list at the same spot so nothing restarts.
   useEffect(() => {
-    if (!armed || !device || feeding.current) return;
-    const unsent = songs.filter((s) => !sent.current.has(s.key));
-    if (!unsent.length) return;
+    if (!armed || !device || feeding.current || !songs.length || songs.length === issued.current) return;
     feeding.current = true;
     (async () => {
       const st = await player.current?.getCurrentState();
+      const started = issued.current > 0;
       const idle = !st || (st.paused && st.position === 0 && st.track_window.next_tracks.length === 0);
-      if (idle) {
-        // Make this browser the active Spotify device first, then start the list on it.
-        await sp.api('/me/player', { method: 'PUT', body: JSON.stringify({ device_ids: [device], play: false }) }).catch(() => null);
-        await sp.api(`/me/player/play?device_id=${device}`, { method: 'PUT', body: JSON.stringify({ uris: unsent.map((s) => s.uri) }) });
-      } else {
-        for (const s of unsent) await sp.api(`/me/player/queue?${new URLSearchParams({ uri: s.uri, device_id: device })}`, { method: 'POST' });
+      let offset = 0, pos = 0, keepPaused = false;
+      if (started && !idle) { offset = Math.max(0, playingIdx.current); pos = st.position; keepPaused = st.paused; }
+      else if (started) offset = Math.min(issued.current, songs.length - 1); // list had finished: start with the new songs
+      if (!started) await sp.api('/me/player', { method: 'PUT', body: JSON.stringify({ device_ids: [device], play: false }) }).catch(() => null);
+      await sp.api(`/me/player/play?device_id=${device}`, {
+        method: 'PUT', body: JSON.stringify({ uris: songs.map((x) => x.uri), offset: { position: offset }, position_ms: pos }),
+      });
+      if (!tuned.current) {
+        // An account left on "repeat one" would loop a single song forever. Play the list in order instead.
+        await sp.api(`/me/player/repeat?state=context&device_id=${device}`, { method: 'PUT' }).catch(() => null);
+        await sp.api(`/me/player/shuffle?state=false&device_id=${device}`, { method: 'PUT' }).catch(() => null);
+        tuned.current = true;
       }
-      unsent.forEach((s) => sent.current.add(s.key));
+      if (keepPaused) player.current?.pause();
+      issued.current = songs.length;
       setErr('');
     })().catch((e) => {
-      const code = String(e).match(/\d{3}/)?.[0];
+      const code = String(e).match(/[0-9]{3}/)?.[0];
       setErr(code === '403' ? 'Spotify says this account can’t play here (Premium needed).'
         : code === '404' ? 'Spotify couldn’t find this player yet. Tap Retry.'
         : code === '401' ? 'Spotify signed out. Reconnect.'
@@ -115,7 +133,7 @@ export function MusicTV() {
     setErr(''); setNeedsTap(false);
     const st = await pl?.getCurrentState?.();
     if (st?.track_window?.current_track) pl.resume();
-    else setKick((k) => k + 1);
+    else { issued.current = 0; tuned.current = false; setKick((k) => k + 1); }
   };
 
   // Tell the phones what's going on.
